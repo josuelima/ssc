@@ -9,18 +9,32 @@ module SSC
       self
     end
 
-    def start_instances instances
+    def start_instances instances, opts = {}
       stopped = instances_by_status AWS::EC2_CONS::STOPPED
       stopped.select! { |_, meta| instances.include? meta['name'] } unless instances.empty?
+
+      # Remove timeouts if run by cron
+      remove_timeout! @instances.keys if opts[:cron] == true
+
       unless stopped.empty?
+        # Add timeout if start is temporary
+        add_timeout!(stopped.keys, opts[:timeout] * 3600) unless opts[:timeout].nil?
+
         AWS::CLI_Interface.ec2_start_instances stopped.keys
         restart_ecs_tasks stopped.select { |_, meta| meta.has_key? 'ecs' }
       end
     end
 
-    def stop_instances instances
+    def stop_instances instances, opts = {}
       running = instances_by_status AWS::EC2_CONS::RUNNING
       running.select! { |_, meta| instances.include? meta['name'] } unless instances.empty?
+
+      # Select only instances with timeout
+      running.select! { |_, meta| meta.has_key? 'timeout' } if opts[:cron] == true
+
+      # Don't stop instances with valid timeout
+      running.delete_if { |_, meta| meta.has_key? 'timeout' && Time.now < Time.parse(meta['timetout']) }
+
       unless running.empty?
         save_current_running_tasks! running.select { |_, meta| meta.has_key? 'ecs' }
         remove_timeout! running.keys
@@ -57,9 +71,15 @@ module SSC
       File.write @source, @instances.to_json
     end
 
+    # Add timeout
+    def add_timeout! i_ids, timeout
+      i_ids.each { |i_id| @instances[i_id]['timeout'] = timeout }
+      File.write @source, @instances.to_json
+    end
+
     # Remove timeouts from insntaces to be stopped
     def remove_timeout! i_ids
-      i_ids.each { |i_id| @intances[i_id].delete('timeout') }
+      i_ids.each { |i_id| @instances[i_id].delete 'timeout' }
       File.write @source, @instances.to_json
     end
 
@@ -76,7 +96,7 @@ module SSC
           fail 'not running' unless AWS::CLI_Interface.ec2_instance_status(i_id) == AWS::EC2_CONS::RUNNING
           AWS::CLI_Interface.ecs_run_task meta['ecs']['cluster'], meta['ecs']['task']
         rescue
-          sleep(50) # wait 10 seconds until try again
+          sleep(50) # wait 50 seconds until try again
           retry if tries < 5
         end
       end

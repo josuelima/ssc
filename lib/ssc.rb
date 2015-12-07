@@ -2,6 +2,7 @@
 require 'aws-sdk'
 require 'json'
 require 'colorize'
+require 'time'
 
 # SSC
 require 'ssc/version'

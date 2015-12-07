@@ -9,8 +9,9 @@ module SSC
     private
 
     def parse args
+      exec = {}
+
       opt_parser = OptionParser.new do |opts|
-        exec = {}
         # Stop all instances on descriptor file
         # ssc --stop
         #
@@ -22,6 +23,16 @@ module SSC
         opts.on('--stop [INSTANCES]', Array, 'Stop instances') do |instances|
           exec[:command]   = :stop
           exec[:instances] = instances || []
+        end
+
+        # To be used along with --stopped or --start
+        # Stop: Stop instances with timeout expired
+        # Start: Remove timeout from instances
+        #
+        # ssc --stop --cron
+        # ssc --start --cron
+        opts.on('--cron', 'Stop timedout instances/Start: Remove timeout from instances') do
+          exec[:cron] = true
         end
 
         # Start all instances on descriptor file
@@ -50,19 +61,19 @@ module SSC
         opts.on('--status', 'Stop all instance(s)') do
           exec[:command] = :status
         end
-
-        if exec[:command] == :stop
-          Scheduler.new.stop_instances exec[:instances]
-        elsif exec[:command] == :start
-          Scheduler.new.start_instances exec[:instances], exec[:for]
-        elsif exec[:command] == :status
-          Scheduler.new.instances_status
-        else
-          puts 'No valid option provided'
-        end
       end
 
       opt_parser.parse! args
+
+      if exec[:command] == :stop
+        Scheduler.new.stop_instances exec[:instances], {cron: exec[:cron]}
+      elsif exec[:command] == :start
+        Scheduler.new.start_instances exec[:instances], {cron: exec[:cron], timeout: exec[:for]}
+      elsif exec[:command] == :status
+        Scheduler.new.instances_status
+      else
+        puts 'No valid option provided'
+      end
     end
   end
 end
