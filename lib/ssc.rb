@@ -3,8 +3,10 @@ require 'aws-sdk'
 require 'json'
 require 'colorize'
 require 'time'
+require 'logger'
 
 # SSC
+require 'ssc/logging'
 require 'ssc/version'
 require 'ssc/scheduler'
 require 'ssc/aws/ec2_cons'

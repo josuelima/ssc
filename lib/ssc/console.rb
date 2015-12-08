@@ -3,6 +3,7 @@ require 'optparse'
 module SSC
   class Console
     def initialize args
+      Logging.log "Starging SSC with #{args}"
       parse args
     end
 
@@ -45,7 +46,7 @@ module SSC
         # ssc --start s-database-1,s-database-2,s-enterprise-1
         opts.on('--start [INSTANCES]', Array, 'Start instances') do |instances|
           exec[:command]   = :start
-          exec[:instances] = instances
+          exec[:instances] = instances || []
         end
 
         # To be used along with --start
@@ -66,14 +67,18 @@ module SSC
       opt_parser.parse! args
 
       if exec[:command] == :stop
+        Logging.log 'Stopping instances'.colorize(:blue)
         Scheduler.new.stop_instances exec[:instances], {cron: exec[:cron]}
       elsif exec[:command] == :start
+        Logging.log 'Starting instances'.colorize(:blue)
         Scheduler.new.start_instances exec[:instances], {cron: exec[:cron], timeout: exec[:for]}
       elsif exec[:command] == :status
         Scheduler.new.instances_status
       else
         puts 'No valid option provided'
       end
+
+      Logging.log 'Process complete'.colorize(:green)
     end
   end
 end

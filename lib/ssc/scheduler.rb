@@ -16,11 +16,15 @@ module SSC
       # Remove timeouts if run by cron
       remove_timeout! @instances.keys if opts[:cron] == true
 
-      unless stopped.empty?
+      if stopped.empty?
+        Logging.log 'No instances to start this moment'.colorize(:blue)
+      else
         # Add timeout if start is temporary
-        add_timeout!(stopped.keys, opts[:timeout] * 3600) unless opts[:timeout].nil?
+        add_timeout!(stopped.keys, Time.now + opts[:timeout] * 3600) unless opts[:timeout].nil?
 
+        Logging.log "Starting #{stopped.map { |_, meta| meta['name']}.join(' ')}".colorize(:blue)
         AWS::CLI_Interface.ec2_start_instances stopped.keys
+
         restart_ecs_tasks stopped.select { |_, meta| meta.has_key? 'ecs' }
       end
     end
@@ -33,11 +37,15 @@ module SSC
       running.select! { |_, meta| meta.has_key? 'timeout' } if opts[:cron] == true
 
       # Don't stop instances with valid timeout
-      running.delete_if { |_, meta| meta.has_key? 'timeout' && Time.now < Time.parse(meta['timetout']) }
+      running.delete_if { |_, meta| meta.has_key?('timeout') && Time.now < Time.parse(meta['timeout']) }
 
-      unless running.empty?
+      if running.empty?
+        Logging.log 'No instances to stop at this moment'.colorize(:blue)
+      else
         save_current_running_tasks! running.select { |_, meta| meta.has_key? 'ecs' }
-        remove_timeout! running.keys
+        remove_timeout! running.select { |i_id, meta| meta.has_key? 'timeout' }.keys
+
+        Logging.log "Stopping #{running.map { |_, meta| meta['name']}.join(' ')}".colorize(:blue)
         AWS::CLI_Interface.ec2_stop_instances running.keys
       end
     end
@@ -49,7 +57,7 @@ module SSC
         output = "#{meta['name']} (#{i_id})".colorize(color: :white, background: :blue) +
                  " : ".colorize(:yellow) +
                  "#{status[:label]}".colorize(color: :white, background: status[:color])
-        puts output
+        Logging.log output
       end
     end
 
@@ -65,6 +73,8 @@ module SSC
     def save_current_running_tasks! instances
       instances.each do |i_id, meta|
         current_task = AWS::CLI_Interface.ecs_current_running_task meta['ecs']['cluster']
+
+        Logging.log "Save running task (#{current_task}) for #{meta['name']}".colorize(:yellow)
         @instances[i_id]['ecs']['task'] = current_task
       end
 
@@ -73,12 +83,14 @@ module SSC
 
     # Add timeout
     def add_timeout! i_ids, timeout
+      Logging.log "Add timeout (#{timeout}) for #{i_ids.join(', ')}".colorize(:yellow)
       i_ids.each { |i_id| @instances[i_id]['timeout'] = timeout }
       File.write @source, @instances.to_json
     end
 
     # Remove timeouts from insntaces to be stopped
     def remove_timeout! i_ids
+      Logging.log "Remove timeout for #{i_ids.join(', ')}".colorize(:yellow)
       i_ids.each { |i_id| @instances[i_id].delete 'timeout' }
       File.write @source, @instances.to_json
     end
@@ -93,10 +105,12 @@ module SSC
         tries = 0
         begin
           tries = tries + 1
+          Logging.log "Restarting ECS task for #{meta['name']} (##{tries} try)".colorize(:yellow)
           fail 'not running' unless AWS::CLI_Interface.ec2_instance_status(i_id) == AWS::EC2_CONS::RUNNING
           AWS::CLI_Interface.ecs_run_task meta['ecs']['cluster'], meta['ecs']['task']
         rescue
-          sleep(50) # wait 50 seconds until try again
+          Logging.log "#{meta['name']} fully running yet. Waiting 120 seconds for next try".colorize(:red)
+          sleep(120) # wait 50 seconds until try again
           retry if tries < 5
         end
       end
