@@ -4,6 +4,7 @@ require 'json'
 require 'colorize'
 require 'time'
 require 'logger'
+require 'ruby-progressbar'
 
 # SSC
 require 'ssc/logging'

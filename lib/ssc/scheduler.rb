@@ -109,8 +109,12 @@ module SSC
           fail 'not running' unless AWS::CLI_Interface.ec2_instance_status(i_id) == AWS::EC2_CONS::RUNNING
           AWS::CLI_Interface.ecs_run_task meta['ecs']['cluster'], meta['ecs']['task']
         rescue
-          Logging.log "#{meta['name']} fully running yet. Waiting 120 seconds for next try".colorize(:red)
-          sleep(120) # wait 50 seconds until try again
+          Logging.log "#{meta['name']} not fully running yet. Waiting 120 seconds for next try".colorize(:red)
+          progressbar = ProgressBar.create
+          120.times do
+           progressbar.increment
+           sleep 1.2
+          end
           retry if tries < 5
         end
       end
