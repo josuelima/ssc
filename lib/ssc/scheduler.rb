@@ -50,17 +50,6 @@ module SSC
       end
     end
 
-    # Print instance status directly to the console
-    def instances_status
-      @instances.each do |i_id, meta|
-        status = AWS::CLI_Interface.ec2_instance_status(i_id)
-        output = "#{meta['name']} (#{i_id})".colorize(color: :white, background: :blue) +
-                 " : ".colorize(:yellow) +
-                 "#{status[:label]}".colorize(color: :white, background: status[:color])
-        Logging.log output
-      end
-    end
-
     def keepup timeout, instances
       running = instances_by_status AWS::EC2_CONS::RUNNING
       running.select! { |_, meta| instances.include? meta['name'] } unless instances.empty?
@@ -69,6 +58,23 @@ module SSC
         Logging.log 'No instances running this moment'.colorize(:blue)
       else
         add_timeout!(running.keys, timeout)
+      end
+    end
+
+    # Print instance status directly to the console
+    def instances_status
+      @instances.each do |i_id, meta|
+        status = AWS::CLI_Interface.ec2_instance_status(i_id)
+        output = "#{meta['name']} (#{i_id})".colorize(color: :white, background: :blue) +
+                 " : ".colorize(:yellow) +
+                 "#{status[:label]}".colorize(color: :white, background: status[:color])
+
+        if meta.has_key? 'timeout'
+          output += " : ".colorize(:yellow)
+          output += "Timeout: #{meta['timeout']}".colorize(color: :black, background: :light_yellow)
+        end
+
+        Logging.log output
       end
     end
 
