@@ -20,7 +20,7 @@ module SSC
         Logging.log 'No instances to start this moment'.colorize(:blue)
       else
         # Add timeout if start is temporary
-        add_timeout!(stopped.keys, Time.now + opts[:timeout] * 3600) unless opts[:timeout].nil?
+        add_timeout!(stopped.keys, opts[:timeout]) unless opts[:timeout].nil?
 
         Logging.log "Starting #{stopped.map { |_, meta| meta['name']}.join(' ')}".colorize(:blue)
         AWS::CLI_Interface.ec2_start_instances stopped.keys
@@ -61,6 +61,17 @@ module SSC
       end
     end
 
+    def keepup timeout, instances
+      running = instances_by_status AWS::EC2_CONS::RUNNING
+      running.select! { |_, meta| instances.include? meta['name'] } unless instances.empty?
+
+      if running.empty?
+        Logging.log 'No instances running this moment'.colorize(:blue)
+      else
+        add_timeout!(running.keys, timeout)
+      end
+    end
+
     private
 
     def instances_by_status status
@@ -83,6 +94,7 @@ module SSC
 
     # Add timeout
     def add_timeout! i_ids, timeout
+      timeout = Time.now + timeout * 3600
       Logging.log "Add timeout (#{timeout}) for #{i_ids.join(', ')}".colorize(:yellow)
       i_ids.each { |i_id| @instances[i_id]['timeout'] = timeout }
       File.write @source, @instances.to_json

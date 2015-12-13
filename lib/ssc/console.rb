@@ -49,6 +49,13 @@ module SSC
           exec[:instances] = instances || []
         end
 
+        # Keep intance(s) up for X hours
+        # The instance(s) must be started
+        opts.on('--keepup [INSTANCES]', Array, 'Keep instance(s) up') do |instances|
+          exec[:command] = :keepup
+          exec[:instances] = instances || []
+        end
+
         # To be used along with --start
         # Will temporary start a stopped instance
         #
@@ -72,6 +79,8 @@ module SSC
       elsif exec[:command] == :start
         Logging.log 'Starting instances'.colorize(:blue)
         Scheduler.new.start_instances exec[:instances], {cron: exec[:cron], timeout: exec[:for]}
+      elsif exec[:command] == :keepup
+        Scheduler.new.keepup exec[:for], exec[:instances]
       elsif exec[:command] == :status
         Scheduler.new.instances_status
       else
