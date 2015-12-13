@@ -130,8 +130,8 @@ module SSC
           Logging.log "#{meta['name']} not fully running yet. Waiting 120 seconds for next try".colorize(:red)
           progressbar = ProgressBar.create
           100.times do
-           progressbar.increment
-           sleep 1.2
+            progressbar.increment
+            sleep 1.2
           end
           retry if tries < 5
         end
